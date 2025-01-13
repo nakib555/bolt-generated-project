@@ -9,8 +9,10 @@ import React, { useState, useEffect, useRef } from 'react';
     import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
     import { useToast } from "@/hooks/use-toast";
     import { extractCodeFromMarkdown } from "@/lib/utils";
+    import { useApiService } from '@/services/apiService';
 
-    const API_KEY = "AIzaSyB1vl8R0ysWR17-IELYc7Nj71wD5jdtwxI";
+    const GOOGLE_SEARCH_API_KEY = "AIzaSyDzYny8oRzyBKqt9i6B4_u_NsiopPETA5Y";
+    const GOOGLE_SEARCH_ENGINE_ID = "f2b4f3f852e3242c1";
 
     interface Message {
       sender: 'user' | 'bot';
@@ -31,6 +33,35 @@ import React, { useState, useEffect, useRef } from 'react';
       const scrollAreaRef = useRef<HTMLDivElement>(null);
       const [selectedModel, setSelectedModel] = useState('gemini-pro');
       const { toast } = useToast();
+      const { generateContent, fetchGoogleResults } = useApiService();
+      const [searchContext, setSearchContext] = useState<string | null>(null);
+      const [isSearching, setIsSearching] = useState(false);
+
+      const handleSearch = async () => {
+        setIsSearching(true);
+        try {
+          if (!input.trim()) {
+            toast({
+              title: "Error",
+              description: "Please enter a message before searching.",
+              variant: "destructive",
+            });
+            return;
+          }
+          const searchResults = await fetchGoogleResults(input);
+          setSearchContext(searchResults);
+        } catch (error: any) {
+          console.error("Error fetching Google search results:", error);
+          setSearchContext('Error fetching search results.');
+          toast({
+            title: "Search Error",
+            description: error.message || 'Failed to fetch search results.',
+            variant: "destructive",
+          });
+        } finally {
+          setIsSearching(false);
+        }
+      };
 
       const sendMessage = async () => {
         if (!input.trim()) {
@@ -47,37 +78,8 @@ import React, { useState, useEffect, useRef } from 'react';
         setInput('');
 
         try {
-          const requestBody = {
-            contents: [{
-              parts: [{ text: input }],
-            }],
-          };
-
-          const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:generateContent?key=${API_KEY}`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify(requestBody),
-            }
-          );
-
-          if (!response.ok) {
-            let errorMessage = `HTTP error! status: ${response.status}`;
-            try {
-              const errorData = await response.json();
-              errorMessage = errorData.error?.message || errorMessage;
-              console.error("API Error Details:", errorData);
-            } catch (jsonError) {
-              console.error("Failed to parse error JSON:", jsonError);
-            }
-            throw new Error(errorMessage);
-          }
-
-          const data = await response.json();
-          const botResponse = data.candidates[0].content.parts[0].text;
+          const contextAwareInput = searchContext ? `User query: ${input}\n\nSearch results:\n${searchContext}` : input;
+          const botResponse = await generateContent(selectedModel, contextAwareInput);
           setMessages(prev => [...prev, { sender: 'bot', text: botResponse, displayingText: '' }]);
           startTypingAnimation(botResponse);
 
@@ -94,6 +96,7 @@ import React, { useState, useEffect, useRef } from 'react';
           });
           setMessages(prev => [...prev, { sender: 'bot', text: 'Sorry, I encountered an error.', displayingText: 'Sorry, I encountered an error.' }]);
         }
+        setSearchContext(null);
         setInput('');
       };
 
@@ -219,6 +222,11 @@ import React, { useState, useEffect, useRef } from 'react';
           </ScrollArea>
 
           <div className="flex-none p-4 border-t">
+            <div className="flex gap-2 mb-2">
+              <Button variant="secondary" size="sm" onClick={handleSearch} disabled={isSearching}>
+                {isSearching ? "Searching..." : "Search"}
+              </Button>
+            </div>
             <form className="flex gap-2" onSubmit={(e) => {
               e.preventDefault();
               sendMessage();

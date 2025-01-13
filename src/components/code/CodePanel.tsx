@@ -6,14 +6,19 @@ import React, { useState } from 'react';
     import { CodePreview } from "./CodePreview";
     import { fileStructure } from "@/data/fileStructure";
     import { useToast } from "@/hooks/use-toast";
-    import { ChatPanel } from "./ChatPanel";
+    import { useApiService } from '@/services/apiService';
 
-    export const CodePanel = () => {
-      const [selectedFileContent, setSelectedFileContent] = useState<string>('// Click on a file to view its contents');
+    interface CodePanelProps {
+      initialCode?: string;
+    }
+
+    export const CodePanel: React.FC<CodePanelProps> = ({ initialCode }) => {
+      const [selectedFileContent, setSelectedFileContent] = useState<string>(initialCode || '// Click on a file to view its contents');
       const [codeFromAI, setCodeFromAI] = useState<string>('');
       const [isCodePreviewExpanded, setIsCodePreviewExpanded] = useState(true);
       const { toast } = useToast();
       const [isExecuting, setIsExecuting] = useState(false);
+      const { generateContent } = useApiService();
 
       const handleCodeBlockUpdate = (code: string) => {
         setCodeFromAI(code);
@@ -26,41 +31,8 @@ import React, { useState } from 'react';
       const handleRunCode = async () => {
         setIsExecuting(true);
         try {
-          const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=AIzaSyB1vl8R0ysWR17-IELYc7Nj71wD5jdtwxI`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                contents: [{
-                  parts: [{ text: selectedFileContent }],
-                }],
-              }),
-            }
-          );
-
-          if (!response.ok) {
-            let errorMessage = `HTTP error! status: ${response.status}`;
-            try {
-              const errorData = await response.json();
-              errorMessage = errorData.error?.message || errorMessage;
-              console.error("API Error Details:", errorData);
-            } catch (jsonError) {
-              console.error("Failed to parse error JSON:", jsonError);
-            }
-            setSelectedFileContent(`// API Response Error:\n${errorMessage}`);
-            toast({
-              title: "API Error",
-              description: errorMessage,
-              variant: "destructive",
-            });
-          } else {
-            const data = await response.json();
-            const botResponse = data.candidates[0].content.parts[0].text;
-            setSelectedFileContent(`// API Response:\n${botResponse}`);
-          }
+          const botResponse = await generateContent('gemini-pro', selectedFileContent);
+          setSelectedFileContent(`// API Response:\n${botResponse}`);
         } catch (error: any) {
           console.error('Error sending message:', error);
           toast({
