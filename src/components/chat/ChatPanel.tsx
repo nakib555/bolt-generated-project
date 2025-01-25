@@ -10,9 +10,7 @@ import React, { useState, useEffect, useRef } from 'react';
     import { useToast } from "@/hooks/use-toast";
     import { extractCodeFromMarkdown } from "@/lib/utils";
     import { useApiService } from '@/services/apiService';
-
-    const GOOGLE_SEARCH_API_KEY = "AIzaSyDzYny8oRzyBKqt9i6B4_u_NsiopPETA5Y";
-    const GOOGLE_SEARCH_ENGINE_ID = "f2b4f3f852e3242c1";
+    import { useChatHistory } from '@/hooks/use-chat-history';
 
     interface Message {
       sender: 'user' | 'bot';
@@ -22,12 +20,11 @@ import React, { useState, useEffect, useRef } from 'react';
 
     interface ChatPanelProps {
       onCodeUpdate: (code: string) => void;
+      chatId: string;
     }
 
-    export const ChatPanel: React.FC<ChatPanelProps> = ({ onCodeUpdate }) => {
-      const [messages, setMessages] = useState<Message[]>([
-        { sender: 'bot', text: "Welcome! I'm your AI assistant. How can I help you today?", displayingText: "Welcome! I'm your AI assistant. How can I help you today?" },
-      ]);
+    export const ChatPanel: React.FC<ChatPanelProps> = ({ onCodeUpdate, chatId }) => {
+      const [messages, setMessages] = useState<Message[]>([]);
       const [input, setInput] = useState('');
       const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
       const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -36,6 +33,16 @@ import React, { useState, useEffect, useRef } from 'react';
       const { generateContent, fetchGoogleResults } = useApiService();
       const [searchContext, setSearchContext] = useState<string | null>(null);
       const [isSearching, setIsSearching] = useState(false);
+      const { addMessage, getChatMessages } = useChatHistory();
+
+      useEffect(() => {
+        const storedMessages = getChatMessages(chatId);
+        if (storedMessages) {
+          setMessages(storedMessages);
+        } else {
+          setMessages([{ sender: 'bot', text: "Welcome! I'm your AI assistant. How can I help you today?", displayingText: "Welcome! I'm your AI assistant. How can I help you today?" }]);
+        }
+      }, [chatId, getChatMessages]);
 
       const handleSearch = async () => {
         setIsSearching(true);
@@ -75,12 +82,15 @@ import React, { useState, useEffect, useRef } from 'react';
 
         const userMessage = { sender: 'user', text: input };
         setMessages(prev => [...prev, userMessage]);
+        addMessage(chatId, [...messages, userMessage]);
         setInput('');
 
         try {
           const contextAwareInput = searchContext ? `User query: ${input}\n\nSearch results:\n${searchContext}` : input;
           const botResponse = await generateContent(selectedModel, contextAwareInput);
-          setMessages(prev => [...prev, { sender: 'bot', text: botResponse, displayingText: '' }]);
+          const botMessage = { sender: 'bot', text: botResponse, displayingText: '' };
+          setMessages(prev => [...prev, botMessage]);
+          addMessage(chatId, [...messages, userMessage, botMessage]);
           startTypingAnimation(botResponse);
 
           const code = extractCodeFromMarkdown(botResponse);
