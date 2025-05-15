@@ -10,6 +10,11 @@ export const useApiService = () => {
       if (!input || typeof input !== 'string') {
         throw new Error("Input must be a non-empty string.");
       }
+
+      if (!model || typeof model !== 'string') {
+        throw new Error("Model name must be a non-empty string.");
+      }
+
       const requestBody = {
         contents: [{
           parts: [{ text: input }],

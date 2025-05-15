@@ -21,22 +21,13 @@ interface ChatPanelProps {
   onCodeUpdate: (code: string) => void;
 }
 
-const predefinedModels = [
-  'gemini-pro',
-  'gemini-2.0-flash-exp',
-  'gemini-1.5-pro',
-  'gemini-2.0-flash-thinking-exp-1219',
-  'gemini-1.5-flash-8b'
-];
-
 export const ChatPanel: React.FC<ChatPanelProps> = ({ onCodeUpdate }) => {
   const [messages, setMessages] = useState<Message[]>([
     { sender: 'bot', text: "Welcome! I'm your AI assistant. How can I help you today?", displayingText: "Welcome! I'm your AI assistant. How can I help you today?" },
   ]);
   const [input, setInput] = useState('');
   const [apiKey, setApiKey] = useState('');
-  const [customModel, setCustomModel] = useState('');
-  const [selectedModel, setSelectedModel] = useState('gemini-pro');
+  const [modelName, setModelName] = useState('gemini-pro');
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
@@ -80,13 +71,22 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ onCodeUpdate }) => {
       return;
     }
 
+    if (!modelName.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a model name.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const userMessage = { sender: 'user', text: input };
     setMessages(prev => [...prev, userMessage]);
     setInput('');
 
     try {
       const contextAwareInput = searchContext ? `User query: ${input}\n\nSearch results:\n${searchContext}` : input;
-      const botResponse = await generateContent(selectedModel, contextAwareInput, apiKey);
+      const botResponse = await generateContent(modelName, contextAwareInput, apiKey);
       setMessages(prev => [...prev, { sender: 'bot', text: botResponse, displayingText: '' }]);
       startTypingAnimation(botResponse);
 
@@ -144,21 +144,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ onCodeUpdate }) => {
     setInput(event.target.value);
   };
 
-  const handleModelChange = (value: string) => {
-    if (predefinedModels.includes(value)) {
-      setSelectedModel(value);
-      setCustomModel('');
-    } else {
-      setSelectedModel(customModel);
-    }
-  };
-
-  const handleCustomModelChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value;
-    setCustomModel(value);
-    setSelectedModel(value);
-  };
-
   return (
     <div className="chat-panel h-full flex flex-col">
       <div className="flex-none p-4 border-b flex flex-col gap-2">
@@ -170,29 +155,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ onCodeUpdate }) => {
           type="password"
           className="mb-2"
         />
-        <div className="flex gap-2">
-          <Select value={selectedModel} onValueChange={handleModelChange}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Select a model" />
-            </SelectTrigger>
-            <SelectContent>
-              {predefinedModels.map((model) => (
-                <SelectItem key={model} value={model}>
-                  {model}
-                </SelectItem>
-              ))}
-              <SelectItem value="custom">Custom Model</SelectItem>
-            </SelectContent>
-          </Select>
-          {selectedModel === 'custom' && (
-            <Input
-              placeholder="Enter custom model name"
-              value={customModel}
-              onChange={handleCustomModelChange}
-              className="flex-1"
-            />
-          )}
-        </div>
+        <Input
+          placeholder="Enter model name (e.g., gemini-pro)"
+          value={modelName}
+          onChange={(e) => setModelName(e.target.value)}
+          className="mb-2"
+        />
       </div>
       
       <ScrollArea className="flex-grow p-4" ref={scrollAreaRef}>
